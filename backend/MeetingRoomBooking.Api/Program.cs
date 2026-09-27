@@ -52,6 +52,26 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Applying migrations at startup only ever happens on this single F1 App
+// Service instance (see infra/README.md); a genuinely multi-instance
+// deployment should migrate as a CI/CD step instead, to avoid concurrent
+// instances racing to migrate the same database at once. Wrapped in the
+// execution strategy so retries compose with EnableRetryOnFailure — this
+// is EF Core's own documented pattern for applying migrations against a
+// provider configured with retry-on-failure.
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    var dbContext = migrationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var strategy = dbContext.Database.CreateExecutionStrategy();
+    await strategy.ExecuteAsync(() => dbContext.Database.MigrateAsync());
+}
+
+using (var seedScope = app.Services.CreateScope())
+{
+    await IdentitySeeder.SeedAsync(seedScope.ServiceProvider);
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
