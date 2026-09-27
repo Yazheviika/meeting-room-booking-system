@@ -28,11 +28,11 @@ reflect booking status to all viewers in real time.
 
 ## Build / run / test
 
-Projects are not yet scaffolded. Once they exist, this section should list the
-real commands (expected shape, to confirm/update as code lands):
-
-- Backend: `dotnet build`, `dotnet run`, `dotnet test` (run from `backend/`)
-- Frontend: `npm install`, `ng serve`, `npm test` (run from `frontend/`)
+- Whole repo: `dotnet build`, `dotnet test` (run from the repo root; uses `MeetingRoomBooking.slnx`)
+- Run the API locally: `dotnet run --project backend/MeetingRoomBooking.Api`
+- Local secrets: `dotnet user-secrets set ConnectionStrings:DefaultConnection "..." --project backend/MeetingRoomBooking.Api`
+- Health check: `GET /health`
+- Frontend (not yet scaffolded): `npm install`, `ng serve`, `npm test` (run from `frontend/`)
 
 ## Coding conventions
 
