@@ -14,6 +14,16 @@
 # Pull requests run the build job (build + test) only, as a pass/fail check
 # before merge — they skip publish/artifact-upload and never run the deploy
 # job (see the `if: github.event_name != 'pull_request'` guards below).
+#
+# The booking concurrency tests (docs/adr/0001-booking-concurrency.md)
+# require a real SQL Server — EF InMemory can't reproduce RCSI or real
+# unique-index enforcement — so the build job runs a SQL Server service
+# container and points ConnectionStrings__DefaultConnection at it. The SA
+# password below is an ephemeral, CI-only credential for a container that
+# only ever exists for the duration of this job; it is not a real secret.
+# There's no --health-cmd wait step: the test fixture's own retry loop on
+# its first connection tolerates the container's cold start, which avoids
+# fighting sqlcmd path differences across SQL Server image versions.
 
 name: Backend CI/CD
 
@@ -45,6 +55,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read # required for actions/checkout
+
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "P@ssw0rd_CI_Only!2026"
+        ports:
+          - 1433:1433
+
+    env:
+      ConnectionStrings__DefaultConnection: "Server=localhost,1433;User Id=sa;Password=P@ssw0rd_CI_Only!2026;TrustServerCertificate=True"
 
     steps:
       - uses: actions/checkout@v4
