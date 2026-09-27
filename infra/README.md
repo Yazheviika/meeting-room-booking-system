@@ -54,8 +54,14 @@ ASP.NET Core (.NET 10) Web API.
   read by the app as `ConnectionStrings:DefaultConnection`.
 - **Application settings**: `Azure__SignalR__ConnectionString`,
   `Cors__AllowedOrigins__0` (append `__1`, `__2`, ... for additional allowed
-  origins) → read by the app as `Azure:SignalR:ConnectionString` and
-  `Cors:AllowedOrigins`.
+  origins), `Jwt__SigningKey`, `Seed__AdminEmail`, `Seed__AdminPassword` →
+  read by the app as `Azure:SignalR:ConnectionString`, `Cors:AllowedOrigins`,
+  `Jwt:SigningKey`, `Seed:AdminEmail`, `Seed:AdminPassword` (names only here
+  — actual values are set directly in the Azure Portal, never committed).
+  `Jwt:Issuer`/`Jwt:Audience` and `Database:MigrateOnStartup` all have
+  working non-secret defaults in `appsettings.json` and don't need an
+  App Setting unless overriding those defaults (`Jwt__Issuer`,
+  `Jwt__Audience`, `Database__MigrateOnStartup`).
 
 ## Frontend app (`app-roombooking-web-vy`)
 
