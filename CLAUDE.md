@@ -104,6 +104,38 @@ database at once. Startup seeding (`IdentitySeeder`) is best-effort: if the
 database is unreachable, it logs an error and lets the app keep starting
 rather than crash-looping.
 
+## Rooms and time slots
+
+A room has a fixed daily set of bookable time slots (`Room` → `TimeSlot`,
+one-to-many). `TimeSlot` is immutable — there is no update endpoint for a
+slot's times; changing a time means deleting the slot and adding a new one,
+so an existing booking can never silently move to another time. `Room`
+soft-deletes via `IsActive` rather than a real delete, since slots (and
+later, bookings) must keep referencing a real row; deleting an
+already-inactive room is a no-op, not a 404, so the delete endpoint stays
+idempotent.
+
+Room-name uniqueness "among active rooms" is a filtered unique index
+(`WHERE IsActive = 1`), the same technique the booking-concurrency ADR uses
+for one-active-booking-per-slot — but unlike booking conflicts, this is
+*not* a stated concurrency requirement (room creation is Admin-only,
+low-contention), so it's an application-level pre-check with the index only
+as a schema-level backstop, not exception-to-409 mapping. Slot overlap and
+start<end have no database constraint at all — SQL Server has no native
+exclusion constraint for interval overlap without triggers, which would be
+overkill here — so both are checked in `TimeSlotValidator`, a small,
+DB-free, directly unit-testable helper.
+
+Two `// TODO (next PR)` markers in `RoomsController` (on slot-delete and
+room-delete) note where the booking feature must add a 409 when a slot or
+room has future active bookings — not yet possible since bookings don't
+exist yet.
+
+`Office:TimeZone` (IANA id, default `Europe/Bucharest`) backs `IOfficeClock`,
+which resolves it once and exposes `Now()`/`Today()` in office local time.
+Not used by any endpoint yet — added ahead of the booking feature's
+bookable-date and past-slot checks.
+
 ## Configuration keys
 
 - `ConnectionStrings:DefaultConnection`
@@ -114,6 +146,7 @@ rather than crash-looping.
 - `Seed:AdminEmail`, `Seed:AdminPassword` (optional; admin seeding is
   skipped with a startup warning if either is absent)
 - `Database:MigrateOnStartup` (bool, defaults to `true`)
+- `Office:TimeZone` (IANA id, not secret, defaults to `Europe/Bucharest`)
 - CORS must allow the specific frontend origin and set `AllowCredentials`
   (required for the SignalR connection).
 
