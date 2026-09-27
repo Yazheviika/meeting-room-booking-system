@@ -31,6 +31,8 @@ reflect booking status to all viewers in real time.
 - Whole repo: `dotnet build`, `dotnet test` (run from the repo root; uses `MeetingRoomBooking.slnx`)
 - Run the API locally: `dotnet run --project backend/MeetingRoomBooking.Api`
 - Local secrets: `dotnet user-secrets set ConnectionStrings:DefaultConnection "..." --project backend/MeetingRoomBooking.Api`
+  (also set `Jwt:SigningKey` the same way — a random 32+ byte string; without
+  it, any authenticated request 500s)
 - Health check: `GET /health`
 - Frontend (not yet scaffolded): `npm install`, `ng serve`, `npm test` (run from `frontend/`)
 
@@ -73,10 +75,45 @@ overwrite, never a 500.
 - Broadcast a slot-status change only *after* the owning DB transaction
   commits — never before, to avoid announcing a booking that then rolls back.
 
+## Authentication
+
+ASP.NET Core Identity (EF Core stores, `AppDbContext : IdentityDbContext<ApplicationUser>`)
+provides user/role storage. Two fixed roles: "Admin" and "User". Auth is
+stateless JWT bearer — no cookies, no server-side session, since the
+frontend is a separate Angular SPA origin. `POST /api/auth/login` issues a
+60-minute token; **refresh tokens are explicitly out of scope** — once a
+token expires, the client logs in again. `POST /api/auth/register` always
+assigns "User"; there is no self-service path to "Admin" — the only admin
+account is optionally seeded at startup from `Seed:AdminEmail`/
+`Seed:AdminPassword`. The `"AdminOnly"` authorization policy
+(`RequireRole("Admin")`) is registered for future admin-only endpoints.
+
+SignalR's `BookingHub` requires authentication. Since a WebSocket upgrade
+can't carry an `Authorization` header, the client sends the JWT as an
+`access_token` query-string parameter, read back out in
+`JwtBearerEvents.OnMessageReceived` — scoped to `/hubs` paths only, so
+ordinary REST calls still require the header.
+
+`Database:MigrateOnStartup` defaults to `true` and applies pending
+migrations automatically at boot, wrapped in
+`Database.CreateExecutionStrategy()` so retries compose with
+`EnableRetryOnFailure`. Fine for the current single-instance F1 App Service
+Plan; a genuinely multi-instance deployment should instead migrate as a
+CI/CD step, to avoid concurrent instances racing to migrate the same
+database at once. Startup seeding (`IdentitySeeder`) is best-effort: if the
+database is unreachable, it logs an error and lets the app keep starting
+rather than crash-looping.
+
 ## Configuration keys
 
 - `ConnectionStrings:DefaultConnection`
 - `Azure:SignalR:ConnectionString`
+- `Jwt:Issuer`, `Jwt:Audience` (not secret — defaulted in `appsettings.json`)
+- `Jwt:SigningKey` (secret, min 32 bytes; empty by default, must be set via
+  user-secrets locally / an Azure App Setting in production)
+- `Seed:AdminEmail`, `Seed:AdminPassword` (optional; admin seeding is
+  skipped with a startup warning if either is absent)
+- `Database:MigrateOnStartup` (bool, defaults to `true`)
 - CORS must allow the specific frontend origin and set `AllowCredentials`
   (required for the SignalR connection).
 
