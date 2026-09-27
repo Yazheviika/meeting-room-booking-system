@@ -88,6 +88,64 @@ section below for how it's wired up and tested.
 - Broadcast a slot-status change only *after* the owning DB transaction
   commits — never before, to avoid announcing a booking that then rolls back.
 
+### Hub contract (`/hubs/booking`, `BookingHub`)
+
+- `JoinRoom(int roomId)` — joins the caller to that room's group. No
+  room-existence check: any authenticated user can already view any room's
+  schedule (`GET /api/rooms/{id}/schedule`), so joining its real-time group
+  is equally unrestricted; joining a nonexistent room's group is harmless
+  (no events ever arrive for it).
+- `LeaveRoom(int roomId)` — removes the caller from that group.
+- Group name format: `"room-{roomId}"` (`BookingHub.GroupName`) — the single
+  source of truth both the hub and `SignalRBookingNotifier` use.
+- Server → client event `"SlotChanged"`, payload:
+  ```json
+  { "roomId": 1, "date": "2026-10-01", "slotId": 42, "isBooked": true }
+  ```
+  Sent once per successful create (`isBooked: true`) or cancel
+  (`isBooked: false`). Note the field is `slotId`, not `timeSlotId` — this
+  is the deliberate wire-contract name, independent of the C# parameter
+  name used elsewhere in this codebase. **Never includes who booked the
+  slot** — same rule as the schedule endpoint.
+- A broadcast failure (e.g. Azure SignalR hiccup) is logged and swallowed
+  in `BookingService`, not the notifier itself — it never turns an
+  already-committed booking/cancellation into a 500.
+- The hub requires authentication; see the Authentication section above for
+  the `?access_token=` query-string handoff WebSocket connections need.
+
+### Client protocol
+
+Join the room's group **before** fetching its schedule, not after —
+fetching first and joining second leaves a window where a booking made in
+between is silently missed (the fetch predates it, the join postdates the
+event). On reconnect, SignalR's automatic reconnect does not restore group
+membership, so the client must **re-join the group and re-fetch the
+schedule**, in that same order, as if starting over.
+
+### Test coverage note
+
+`tests/MeetingRoomBooking.Api.Tests/BookingSignalRTests.cs` verifies this
+end-to-end against a real SQL Server database via
+`WebApplicationFactory` + `Microsoft.AspNetCore.SignalR.Client`, no Azure
+SignalR involved. Most scenarios connect over LongPolling, which is enough
+to prove group-scoped delivery, payload content, cross-room isolation, and
+exactly-one-event-on-a-race. One scenario specifically connects over real
+WebSockets (`TestServer.CreateWebSocketClient()` +
+`HttpConnectionOptions.WebSocketFactory`) to prove the `?access_token=`
+query-string handoff actually works — LongPolling's `AccessTokenProvider`
+sends the token as a normal `Authorization` header on every poll, so a
+LongPolling-only suite would never exercise that fallback at all. This
+combination needed one adjustment worth knowing if you touch that test: the
+SignalR client only auto-appends the access token to the connect URL when
+it owns the WebSocket connection itself — once a custom `WebSocketFactory`
+is set (required to route through `TestServer`), that responsibility shifts
+to the factory, so the test appends the token to the query string itself
+inside it. This is genuinely equivalent to what a real browser client does
+(a WebSocket upgrade can't carry an Authorization header either way), so
+the request that reaches the server — and the `OnMessageReceived` code path
+it exercises — is identical. This path is therefore automated-tested, not
+just a documented gap.
+
 ## Authentication
 
 ASP.NET Core Identity (EF Core stores, `AppDbContext : IdentityDbContext<ApplicationUser>`)
