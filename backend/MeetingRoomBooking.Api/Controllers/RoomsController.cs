@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MeetingRoomBooking.Api.Data;
 using MeetingRoomBooking.Api.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -16,11 +17,13 @@ namespace MeetingRoomBooking.Api.Controllers;
 public class RoomsController : ControllerBase
 {
     private readonly AppDbContext _dbContext;
+    private readonly IOfficeClock _officeClock;
 
     /// <summary>Initializes a new instance of the <see cref="RoomsController"/> class.</summary>
-    public RoomsController(AppDbContext dbContext)
+    public RoomsController(AppDbContext dbContext, IOfficeClock officeClock)
     {
         _dbContext = dbContext;
+        _officeClock = officeClock;
     }
 
     /// <summary>Lists all active rooms with their time slots.</summary>
@@ -50,6 +53,54 @@ public class RoomsController : ControllerBase
         }
 
         return Ok(ToResponse(room));
+    }
+
+    /// <summary>
+    /// Every slot of a room on a given date, with a status of Free, Booked,
+    /// Mine, or Past — never who else booked a slot, regardless of the
+    /// caller's role (Admins see that detail via GET /api/bookings instead).
+    /// </summary>
+    [HttpGet("{id:int}/schedule")]
+    public async Task<ActionResult<IReadOnlyList<ScheduleSlotResponse>>> GetSchedule(int id, [FromQuery] DateOnly date)
+    {
+        var room = await _dbContext.Rooms
+            .Include(r => r.TimeSlots)
+            .FirstOrDefaultAsync(r => r.Id == id && r.IsActive);
+
+        if (room is null)
+        {
+            return NotFound();
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var today = _officeClock.Today();
+        var nowTimeOfDay = TimeOnly.FromDateTime(_officeClock.Now());
+
+        var activeBookings = await _dbContext.Bookings
+            .Where(b => b.TimeSlot!.RoomId == id && b.BookingDate == date && b.Status == BookingStatus.Active)
+            .ToListAsync();
+        var bookingsBySlot = activeBookings.ToDictionary(b => b.TimeSlotId);
+
+        var schedule = room.TimeSlots
+            .OrderBy(slot => slot.StartTime)
+            .Select(slot =>
+            {
+                if (TimeSlotValidator.HasStarted(date, slot.StartTime, today, nowTimeOfDay))
+                {
+                    return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, SlotScheduleStatus.Past);
+                }
+
+                if (!bookingsBySlot.TryGetValue(slot.Id, out var booking))
+                {
+                    return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, SlotScheduleStatus.Free);
+                }
+
+                var status = booking.UserId == userId ? SlotScheduleStatus.Mine : SlotScheduleStatus.Booked;
+                return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, status);
+            })
+            .ToList();
+
+        return Ok(schedule);
     }
 
     /// <summary>Creates a room, optionally with its initial time slots.</summary>
@@ -160,9 +211,31 @@ public class RoomsController : ControllerBase
             return NotFound();
         }
 
-        // TODO (next PR): reject with 409 if this slot has future active bookings.
+        if (await HasFutureActiveBookingAsync(slot))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Slot has future bookings",
+                detail: "This slot has future active bookings and cannot be deleted.");
+        }
+
         _dbContext.TimeSlots.Remove(slot);
-        await _dbContext.SaveChangesAsync();
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Backstop for booking history the future-only check above
+            // doesn't cover: the FK from Booking to TimeSlot is Restrict,
+            // so a slot with any (even past/cancelled) booking rows can't
+            // actually be removed. Caught here rather than left as a 500.
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Slot has booking history",
+                detail: "This slot has booking history and cannot be deleted.");
+        }
 
         return NoContent();
     }
@@ -172,17 +245,48 @@ public class RoomsController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteRoom(int id)
     {
-        var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == id);
+        var room = await _dbContext.Rooms
+            .Include(r => r.TimeSlots)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
         if (room is null)
         {
             return NotFound();
         }
 
-        // TODO (next PR): reject with 409 if the room has future active bookings.
+        foreach (var slot in room.TimeSlots)
+        {
+            if (await HasFutureActiveBookingAsync(slot))
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status409Conflict,
+                    title: "Room has future bookings",
+                    detail: "This room has future active bookings and cannot be deleted.");
+            }
+        }
+
         room.IsActive = false;
         await _dbContext.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// True if the given slot has an active booking on a date/time that
+    /// hasn't happened yet. Fetches the slot's active bookings and applies
+    /// the shared past/future cutoff client-side (bounded per slot — at
+    /// most one active booking per calendar date, ever).
+    /// </summary>
+    private async Task<bool> HasFutureActiveBookingAsync(TimeSlot slot)
+    {
+        var activeBookingDates = await _dbContext.Bookings
+            .Where(b => b.TimeSlotId == slot.Id && b.Status == BookingStatus.Active)
+            .Select(b => b.BookingDate)
+            .ToListAsync();
+
+        var today = _officeClock.Today();
+        var nowTimeOfDay = TimeOnly.FromDateTime(_officeClock.Now());
+        return activeBookingDates.Any(date => !TimeSlotValidator.HasStarted(date, slot.StartTime, today, nowTimeOfDay));
     }
 
     private async Task ValidateNameAsync(string name, int? excludeRoomId)
@@ -259,3 +363,22 @@ public record UpdateRoomRequest(string Name, string? Description, int Capacity);
 
 /// <summary>Request body for <see cref="RoomsController.AddSlot"/>, and for each slot in <see cref="CreateRoomRequest"/>.</summary>
 public record CreateTimeSlotRequest(TimeOnly StartTime, TimeOnly EndTime);
+
+/// <summary>A slot's booking status on a given date, for the schedule view. Never reveals who booked it.</summary>
+public enum SlotScheduleStatus
+{
+    /// <summary>Nobody has booked this slot on this date.</summary>
+    Free,
+
+    /// <summary>Someone other than the caller has booked this slot on this date.</summary>
+    Booked,
+
+    /// <summary>The caller has booked this slot on this date.</summary>
+    Mine,
+
+    /// <summary>This date/slot combination has already happened; it cannot be booked or cancelled.</summary>
+    Past,
+}
+
+/// <summary>One slot's schedule entry, returned by <see cref="RoomsController.GetSchedule"/>.</summary>
+public record ScheduleSlotResponse(int TimeSlotId, TimeOnly StartTime, TimeOnly EndTime, SlotScheduleStatus Status);
