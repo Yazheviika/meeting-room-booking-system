@@ -88,3 +88,4 @@ jobs:
           app-name: 'app-roombooking-api-vy'
           slot-name: 'Production'
           package: .
+          clean: true
