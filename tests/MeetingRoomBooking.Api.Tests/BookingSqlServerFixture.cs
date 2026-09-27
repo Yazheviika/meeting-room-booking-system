@@ -29,6 +29,14 @@ public class BookingSqlServerFixture : IAsyncLifetime
     /// <summary>The <see cref="BookingsApiFactory"/> backed by this fixture's database.</summary>
     public BookingsApiFactory Factory { get; private set; } = null!;
 
+    /// <summary>
+    /// The connection string to this fixture's database — exposed so a
+    /// second, throwaway <see cref="BookingsApiFactory"/> (e.g. one with a
+    /// substituted <c>IBookingNotifier</c>) can point at the same already
+    /// -migrated/seeded database instead of provisioning its own.
+    /// </summary>
+    public string ConnectionString { get; private set; } = string.Empty;
+
     /// <inheritdoc />
     public async Task InitializeAsync()
     {
@@ -52,7 +60,8 @@ public class BookingSqlServerFixture : IAsyncLifetime
         }
 
         builder.InitialCatalog = _databaseName;
-        Factory = new BookingsApiFactory(builder.ConnectionString);
+        ConnectionString = builder.ConnectionString;
+        Factory = new BookingsApiFactory(ConnectionString);
 
         // Force the host to build now (real SQL Server migration + seeding
         // runs as part of that), rather than lazily inside the first test.
