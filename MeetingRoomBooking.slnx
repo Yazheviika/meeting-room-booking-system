@@ -2,4 +2,7 @@
   <Folder Name="/backend/">
     <Project Path="backend/MeetingRoomBooking.Api/MeetingRoomBooking.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MeetingRoomBooking.Api.Tests/MeetingRoomBooking.Api.Tests.csproj" />
+  </Folder>
 </Solution>
