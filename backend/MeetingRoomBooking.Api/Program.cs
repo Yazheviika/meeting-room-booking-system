@@ -122,6 +122,7 @@ if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 using (var seedScope = app.Services.CreateScope())
 {
     await IdentitySeeder.SeedAsync(seedScope.ServiceProvider);
+    await RoomSeeder.SeedAsync(seedScope.ServiceProvider);
 }
 
 // Configure the HTTP request pipeline.
