@@ -1,9 +1,14 @@
+using System.Text;
 using MeetingRoomBooking.Api.Data;
 using MeetingRoomBooking.Api.Hubs;
+using MeetingRoomBooking.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 const string FrontendCorsPolicy = "Frontend";
+const string AdminOnlyPolicy = "AdminOnly";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +31,51 @@ builder.Services
     .AddIdentityCore<ApplicationUser>()
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<AppDbContext>();
+
+var jwtSection = builder.Configuration.GetSection("Jwt");
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidateAudience = true,
+            ValidAudience = jwtSection["Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["SigningKey"] ?? string.Empty)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1),
+        };
+
+        // SignalR's JS client can't set an Authorization header on a
+        // WebSocket upgrade request, so the Angular app sends the JWT as an
+        // ?access_token= query-string parameter instead. Only accept that
+        // fallback for hub paths — ordinary REST calls still require the
+        // header.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AdminOnlyPolicy, policy => policy.RequireRole("Admin"));
+});
+
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 // SignalR always runs; it only talks to Azure SignalR when a connection
 // string is configured, so the app still runs locally without Azure.
@@ -91,6 +141,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(FrontendCorsPolicy);
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
