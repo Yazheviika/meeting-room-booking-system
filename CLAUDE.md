@@ -35,6 +35,18 @@ reflect booking status to all viewers in real time.
   it, any authenticated request 500s)
 - Health check: `GET /health`
 - Frontend (not yet scaffolded): `npm install`, `ng serve`, `npm test` (run from `frontend/`)
+- Booking concurrency tests use a real SQL Server, never EF InMemory (per
+  ADR 0001 — InMemory can't reproduce RCSI or real unique-index
+  enforcement). Plain `dotnet test` already covers them on Windows via
+  LocalDB, no setup needed. On macOS/Linux (or if you'd rather not use
+  LocalDB), start a throwaway SQL Server container first:
+  `docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=<a-strong-password>" -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest`,
+  then set `ConnectionStrings__DefaultConnection` (environment variable) to
+  point at it, e.g.
+  `Server=localhost,1433;User Id=sa;Password=<a-strong-password>;TrustServerCertificate=True`,
+  before running `dotnet test`. CI uses the same mechanism via the SQL
+  Server service container in `backend.yml`. Each test class run creates
+  its own uniquely-named database and drops it afterward.
 
 ## Coding conventions
 
@@ -58,7 +70,8 @@ double-clicks, and client retries). See
 for the full rationale and rejected alternatives. Any change touching the
 booking flow must keep the automated concurrency test green. A conflicting
 booking request must return HTTP 409 with a clear message — never a silent
-overwrite, never a 500.
+overwrite, never a 500. Implemented in `BookingService` — see the Bookings
+section below for how it's wired up and tested.
 
 ## Azure SQL specifics
 
@@ -126,15 +139,51 @@ exclusion constraint for interval overlap without triggers, which would be
 overkill here — so both are checked in `TimeSlotValidator`, a small,
 DB-free, directly unit-testable helper.
 
-Two `// TODO (next PR)` markers in `RoomsController` (on slot-delete and
-room-delete) note where the booking feature must add a 409 when a slot or
-room has future active bookings — not yet possible since bookings don't
-exist yet.
+`RoomsController`'s slot/room delete endpoints return 409 when a slot has a
+future active booking — see the Bookings section below for the shared
+past/future cutoff this reuses, and why deleting a slot with only
+historical (past/cancelled) bookings is *also* blocked, via a different
+mechanism.
 
 `Office:TimeZone` (IANA id, default `Europe/Bucharest`) backs `IOfficeClock`,
-which resolves it once and exposes `Now()`/`Today()` in office local time.
-Not used by any endpoint yet — added ahead of the booking feature's
-bookable-date and past-slot checks.
+which resolves it once and exposes `Now()`/`Today()` in office local time —
+used throughout the booking feature below for bookable-date and past-slot
+checks.
+
+## Bookings
+
+`Booking` (`TimeSlotId`, `BookingDate`, `UserId`, `Status` Active/Cancelled,
+`CreatedAtUtc`, `CancelledAtUtc`) implements the concurrency design from the
+section above and [ADR 0001](docs/adr/0001-booking-concurrency.md): insert
+directly, catch the unique-index violation, map to 409 or same-user
+idempotent success. `Status` is persisted via `HasConversion<string>()`
+specifically so the filtered index's predicate reads `WHERE Status =
+'Active'`, matching the ADR literally rather than an opaque int.
+
+Bookable dates run from today through today + 30 days, in office time
+(`IOfficeClock`); a slot whose start time has already passed cannot be
+booked. That single comparison —
+`TimeSlotValidator.HasStarted(date, slotStart, today, nowTimeOfDay)` — is
+reused three ways: rejecting a new booking for an already-started slot,
+rejecting cancellation of an already-started (i.e. past) booking, and
+`RoomsController`'s slot/room delete 409s, which block on any *future*
+active booking. A slot/room can still have `Restrict`-FK-protected
+*historical* booking rows the future-only check doesn't cover; deleting
+such a slot hits the FK constraint, which `RoomsController.DeleteSlot`
+catches and turns into a 409 too, rather than a 500.
+
+`BookingService` returns a single shared result type (`BookingResult`/
+`BookingResultKind`: `Created`, `AlreadyYours`, `Conflict`, `NotFound`,
+`Invalid`, plus `Cancelled`/`Forbidden` for cancellation) — the controller
+only maps this to HTTP status codes. After a successful create or cancel,
+`IBookingNotifier.SlotChangedAsync` is called (a no-op today; real SignalR
+comes in a later PR), only after the transaction commits, per this file's
+SignalR rule above.
+
+`GET /api/rooms/{id}/schedule` reports each slot as Free, Booked, Mine, or
+Past — **never** who booked it, for any caller including Admins (Admins get
+that detail from `GET /api/bookings` instead, which is Admin-only and
+explicitly for that purpose).
 
 ## Configuration keys
 
