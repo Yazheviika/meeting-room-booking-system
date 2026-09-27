@@ -19,4 +19,16 @@ public static class TimeSlotValidator
     /// </summary>
     public static bool Overlaps(TimeOnly startA, TimeOnly endA, TimeOnly startB, TimeOnly endB) =>
         startA < endB && startB < endA;
+
+    /// <summary>
+    /// True if a slot starting at <paramref name="slotStart"/> on
+    /// <paramref name="date"/> has already started, relative to
+    /// <paramref name="today"/>/<paramref name="nowTimeOfDay"/> in office
+    /// time. The single source of truth for "is this future or past,"
+    /// reused for the booking-creation past-slot check, the
+    /// cancel-past-booking check, and the room/slot delete future-booking
+    /// check (all three are really the same date/time comparison).
+    /// </summary>
+    public static bool HasStarted(DateOnly date, TimeOnly slotStart, DateOnly today, TimeOnly nowTimeOfDay) =>
+        date < today || (date == today && slotStart <= nowTimeOfDay);
 }
