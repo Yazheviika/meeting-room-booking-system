@@ -134,6 +134,10 @@ public class BookingService
             UserId = userId,
             Status = BookingStatus.Active,
             CreatedAtUtc = DateTime.UtcNow,
+            // Set explicitly (rather than relying on EF's change-tracker
+            // fixup) so the controller can always map Room/slot details
+            // off the returned booking without a second query.
+            TimeSlot = slot,
         };
 
         _dbContext.Bookings.Add(booking);
@@ -162,6 +166,7 @@ public class BookingService
 
             if (existing.UserId == userId)
             {
+                existing.TimeSlot ??= slot;
                 return BookingResult.AlreadyYours(existing);
             }
 
@@ -182,6 +187,7 @@ public class BookingService
     {
         var booking = await _dbContext.Bookings
             .Include(b => b.TimeSlot)
+            .ThenInclude(slot => slot!.Room)
             .FirstOrDefaultAsync(b => b.Id == bookingId);
 
         if (booking is null)
