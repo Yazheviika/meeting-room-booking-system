@@ -1,5 +1,6 @@
 using MeetingRoomBooking.Api.Data;
 using MeetingRoomBooking.Api.Hubs;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 const string FrontendCorsPolicy = "Frontend";
@@ -16,6 +17,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sql => sql.EnableRetryOnFailure()));
+
+// AddIdentityCore (not AddIdentity/AddDefaultIdentity) — this is a
+// stateless JWT API for a separate Angular SPA, so we skip Identity's
+// cookie authentication scheme entirely and only take the password
+// hashing / user & role management pieces (UserManager/RoleManager).
+builder.Services
+    .AddIdentityCore<ApplicationUser>()
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<AppDbContext>();
 
 // SignalR always runs; it only talks to Azure SignalR when a connection
 // string is configured, so the app still runs locally without Azure.
