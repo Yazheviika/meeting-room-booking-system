@@ -44,12 +44,19 @@ reflect booking status to all viewers in real time.
 
 ## Concurrency (critical)
 
-Double-booking must be prevented by an explicit database-level mechanism —
-a unique constraint, explicit locking, or optimistic concurrency via a
-rowversion/concurrency token. A naive "check if free, then insert" as two
-unprotected steps is forbidden. Any change touching the booking flow must
-keep the automated concurrency test green. A conflicting booking request must
-return HTTP 409 with a clear message — never a silent overwrite, never a 500.
+Double-booking is prevented by a filtered unique index —
+`Bookings (TimeSlotId, BookingDate) WHERE Status = 'Active'` — the database
+guarantees one active booking per slot per date, independent of app code,
+instance count, or isolation level. The booking service inserts directly; a
+unique-index violation is mapped to HTTP 409, except when the conflicting
+active booking belongs to the same user, in which case the request returns
+success with that existing booking (covers `EnableRetryOnFailure` retries,
+double-clicks, and client retries). See
+[docs/adr/0001-booking-concurrency.md](docs/adr/0001-booking-concurrency.md)
+for the full rationale and rejected alternatives. Any change touching the
+booking flow must keep the automated concurrency test green. A conflicting
+booking request must return HTTP 409 with a clear message — never a silent
+overwrite, never a 500.
 
 ## Azure SQL specifics
 
