@@ -77,6 +77,8 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
+builder.Services.AddSingleton<IOfficeClock, OfficeClock>();
+
 // SignalR always runs; it only talks to Azure SignalR when a connection
 // string is configured, so the app still runs locally without Azure.
 var signalRBuilder = builder.Services.AddSignalR();
