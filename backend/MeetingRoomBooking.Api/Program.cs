@@ -79,6 +79,9 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 builder.Services.AddSingleton<IOfficeClock, OfficeClock>();
 
+builder.Services.AddScoped<BookingService>();
+builder.Services.AddSingleton<IBookingNotifier, NoOpBookingNotifier>();
+
 // SignalR always runs; it only talks to Azure SignalR when a connection
 // string is configured, so the app still runs locally without Azure.
 var signalRBuilder = builder.Services.AddSignalR();
