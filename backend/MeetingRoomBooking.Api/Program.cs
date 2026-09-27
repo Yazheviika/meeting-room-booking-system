@@ -152,3 +152,10 @@ app.MapHub<BookingHub>("/hubs/booking");
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
 app.Run();
+
+/// <summary>
+/// Top-level statements generate an internal <c>Program</c> class; this
+/// partial declaration makes it public so <c>WebApplicationFactory&lt;Program&gt;</c>
+/// in the test project can see it. No runtime effect otherwise.
+/// </summary>
+public partial class Program;
