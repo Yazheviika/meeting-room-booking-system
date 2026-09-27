@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using MeetingRoomBooking.Api.Data;
 using MeetingRoomBooking.Api.Hubs;
 using MeetingRoomBooking.Api.Services;
@@ -14,7 +15,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+// JsonStringEnumConverter: bookings/schedule are the first place an enum
+// (BookingStatus, per-slot schedule status) crosses the API, so responses
+// read "Active"/"Free" etc. instead of raw integers.
+builder.Services.AddControllers().AddJsonOptions(options =>
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
