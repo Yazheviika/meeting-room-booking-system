@@ -89,13 +89,15 @@ public class BookingService
     private readonly AppDbContext _dbContext;
     private readonly IOfficeClock _officeClock;
     private readonly IBookingNotifier _notifier;
+    private readonly ILogger<BookingService> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="BookingService"/> class.</summary>
-    public BookingService(AppDbContext dbContext, IOfficeClock officeClock, IBookingNotifier notifier)
+    public BookingService(AppDbContext dbContext, IOfficeClock officeClock, IBookingNotifier notifier, ILogger<BookingService> logger)
     {
         _dbContext = dbContext;
         _officeClock = officeClock;
         _notifier = notifier;
+        _logger = logger;
     }
 
     /// <summary>
@@ -173,7 +175,7 @@ public class BookingService
             return BookingResult.Conflict("This slot is already booked.");
         }
 
-        await _notifier.SlotChangedAsync(slot.RoomId, date, timeSlotId);
+        await NotifySlotChangedAsync(slot.RoomId, date, timeSlotId, isBooked: true);
         return BookingResult.Created(booking);
     }
 
@@ -216,8 +218,31 @@ public class BookingService
         booking.CancelledAtUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
 
-        await _notifier.SlotChangedAsync(booking.TimeSlot.RoomId, booking.BookingDate, booking.TimeSlotId);
+        await NotifySlotChangedAsync(booking.TimeSlot.RoomId, booking.BookingDate, booking.TimeSlotId, isBooked: false);
         return BookingResult.Cancelled(booking);
+    }
+
+    /// <summary>
+    /// Calls <see cref="IBookingNotifier.SlotChangedAsync"/>, catching and
+    /// logging any failure rather than letting it propagate: the booking
+    /// itself already committed, so a broadcast failure must never turn a
+    /// successful request into a 500.
+    /// </summary>
+    private async Task NotifySlotChangedAsync(int roomId, DateOnly date, int timeSlotId, bool isBooked)
+    {
+        try
+        {
+            await _notifier.SlotChangedAsync(roomId, date, timeSlotId, isBooked);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to notify slot change for room {RoomId}, slot {TimeSlotId}, date {Date}.",
+                roomId,
+                timeSlotId,
+                date);
+        }
     }
 
     private static bool IsActiveSlotUniqueViolation(DbUpdateException ex) =>

@@ -9,5 +9,5 @@ namespace MeetingRoomBooking.Api.Services;
 public interface IBookingNotifier
 {
     /// <summary>A slot's booking status changed for the given room/date/slot.</summary>
-    Task SlotChangedAsync(int roomId, DateOnly date, int timeSlotId);
+    Task SlotChangedAsync(int roomId, DateOnly date, int timeSlotId, bool isBooked);
 }
