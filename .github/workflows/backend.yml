@@ -1,0 +1,90 @@
+# Backend CI/CD.
+#
+# Replaces the workflow Azure Deployment Center auto-generated
+# (main_app-roombooking-api-vy.yml), which assumed a single-project repo:
+# it built/published at the repo root with no target and never ran tests.
+# This repo's MeetingRoomBooking.slnx holds both the API and the xUnit test
+# project, so a root-level `dotnet publish` would also try to publish the
+# test project. This workflow runs `dotnet test` as a gate before deploying,
+# and publishes only backend/MeetingRoomBooking.Api. Path filters keep
+# frontend- or docs-only changes from triggering a backend deploy. The
+# Azure login secrets and deploy target below are carried over unchanged
+# from the generated workflow.
+
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+      - 'global.json'
+      - 'Directory.Build.props'
+      - 'MeetingRoomBooking.slnx'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-restore --no-build
+
+      - name: Publish API
+        run: >
+          dotnet publish backend/MeetingRoomBooking.Api/MeetingRoomBooking.Api.csproj
+          --configuration Release --no-restore --no-build
+          --output ${{ env.DOTNET_ROOT }}/myapp
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-app
+          path: ${{ env.DOTNET_ROOT }}/myapp
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write # required for requesting the JWT
+      contents: read # required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_17B8F4A9F53D45F0823381372963F506 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_DEE2BFEAB2254B33B4CA9B8F77603D5E }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F0B5D32AB10D449B8EF53DB9C8248CE4 }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'app-roombooking-api-vy'
+          slot-name: 'Production'
+          package: .
