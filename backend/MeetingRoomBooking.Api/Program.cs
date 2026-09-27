@@ -48,7 +48,16 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Azure App Service terminates TLS in front of the container and only ever
+// forwards plain HTTP (port 8080) to the app, so UseHttpsRedirection there
+// just warns "Failed to determine the https port" on every request. HTTPS
+// is enforced instead by the App Service "HTTPS Only" setting (see
+// infra/README.md). Only redirect locally, where Kestrel really does serve
+// both http and https endpoints.
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors(FrontendCorsPolicy);
 
