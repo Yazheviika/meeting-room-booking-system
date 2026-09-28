@@ -1,5 +1,4 @@
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
-import { HttpErrorResponse } from '@angular/common/http';
 
 /**
  * Mirrors ASP.NET Core Identity's untouched default password options (no
@@ -38,18 +37,3 @@ export const passwordRulesValidator: ValidatorFn = (control: AbstractControl): V
 
   return Object.keys(errors).length > 0 ? { passwordRules: errors } : null;
 };
-
-/**
- * Register's 400 response is a ValidationProblemDetails whose `errors`
- * dict is keyed by ASP.NET Identity's error codes (e.g. "PasswordTooShort",
- * "DuplicateUserName"), not by form field names — so there's no specific
- * control to attach these to. Flattened into a plain list instead.
- */
-export function extractValidationErrors(error: HttpErrorResponse): string[] {
-  const errors = (error.error as { errors?: Record<string, string[]> } | null)?.errors;
-  if (!errors) {
-    return [];
-  }
-
-  return Object.values(errors).flat();
-}
