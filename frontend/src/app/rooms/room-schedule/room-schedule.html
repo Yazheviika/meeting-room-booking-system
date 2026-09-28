@@ -1,0 +1,54 @@
+<section class="room-schedule">
+  @if (room(); as r) {
+    <h1>{{ r.name }}</h1>
+    <p>Capacity: {{ r.capacity }}</p>
+  }
+
+  <mat-form-field appearance="outline">
+    <mat-label>Date</mat-label>
+    <input
+      matInput
+      [matDatepicker]="picker"
+      [value]="selectedDate()"
+      [min]="minDate"
+      [max]="maxDate"
+      (dateChange)="onDateChange($event.value)"
+    />
+    <mat-datepicker-toggle matIconSuffix [for]="picker"></mat-datepicker-toggle>
+    <mat-datepicker #picker></mat-datepicker>
+  </mat-form-field>
+  <p class="office-time-note">Times shown are office time.</p>
+
+  @if (errorMessage()) {
+    <p class="error-message">{{ errorMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <p>Loading schedule…</p>
+  } @else {
+    <ul class="slot-list">
+      @for (slot of schedule(); track slot.timeSlotId) {
+        <li class="slot slot--{{ slot.status.toLowerCase() }}">
+          <span class="slot-time">{{ slot.startTime.slice(0, 5) }}–{{ slot.endTime.slice(0, 5) }}</span>
+          <span class="slot-status">{{ slot.status }}</span>
+          @if (slot.status === 'Free') {
+            <button mat-stroked-button [disabled]="pendingSlotId() === slot.timeSlotId" (click)="book(slot)">
+              Book
+            </button>
+          } @else if (slot.status === 'Mine') {
+            <button
+              mat-stroked-button
+              color="warn"
+              [disabled]="pendingSlotId() === slot.timeSlotId"
+              (click)="cancel(slot)"
+            >
+              Cancel
+            </button>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  <a routerLink="/rooms">Back to rooms</a>
+</section>
