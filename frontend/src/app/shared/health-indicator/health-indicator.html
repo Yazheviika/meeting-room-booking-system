@@ -1,0 +1,11 @@
+@switch (status()) {
+  @case ('checking') {
+    <span class="status status--checking" title="Checking backend status…">●</span>
+  }
+  @case ('healthy') {
+    <span class="status status--healthy" title="Backend is healthy.">●</span>
+  }
+  @case ('unreachable') {
+    <span class="status status--unreachable" title="Backend is unreachable.">●</span>
+  }
+}
