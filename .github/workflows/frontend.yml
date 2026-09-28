@@ -1,0 +1,106 @@
+# Frontend CI/CD.
+#
+# Mirrors backend.yml's two-job shape: a build job (npm ci, production
+# build, unit tests) that also runs on pull_request as a pass/fail gate
+# (no deploy), and a deploy job that only runs on push to main. Path
+# filters keep backend- or docs-only changes from triggering a frontend
+# deploy.
+#
+# The unit test runner here is Vitest (Angular CLI's current default,
+# `ng test` under the hood) - it runs headless with no browser dependency,
+# unlike Karma, so no browser-launcher setup is needed in CI.
+#
+# Only the contents of dist/frontend/browser are deployed (index.html at
+# the package root) - that's the whole static site the app's
+# `pm2 serve --spa` startup command expects; there is no package.json at
+# the deployment root, so Azure has nothing for Oryx to build. Oryx's
+# build-on-deploy still needs to be explicitly disabled on the App Service
+# itself via the SCM_DO_BUILD_DURING_DEPLOYMENT=false Application Setting -
+# see infra/README.md's Frontend app section.
+#
+# Azure login secrets and deploy target are reused unchanged from
+# backend.yml - the same OIDC managed identity already has Website
+# Contributor on this frontend app too.
+
+name: Frontend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # required for actions/checkout
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build (production)
+        run: npm run build
+
+      - name: Upload artifact for deployment job
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-app
+          path: frontend/dist/frontend/browser
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write # required for requesting the JWT
+      contents: read # required for actions/checkout
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_17B8F4A9F53D45F0823381372963F506 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_DEE2BFEAB2254B33B4CA9B8F77603D5E }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F0B5D32AB10D449B8EF53DB9C8248CE4 }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'app-roombooking-web-vy'
+          slot-name: 'Production'
+          package: .
+          clean: true
