@@ -69,3 +69,14 @@ Angular SPA on Node.
 
 - **Startup Command**: `pm2 serve /home/site/wwwroot --no-daemon --spa`
 - **HTTPS Only**: On
+- **Application settings**: `SCM_DO_BUILD_DURING_DEPLOYMENT` = `false` —
+  required. [../.github/workflows/frontend.yml](../.github/workflows/frontend.yml)
+  deploys only the already-built static output
+  (`dist/frontend/browser/`, no `package.json` at the deployment root), so
+  there's nothing for Oryx to build; without this setting Azure's
+  zip-deploy still attempts an Oryx build step on every deploy and can
+  fail or produce a broken `wwwroot`.
+- Once this app has a real deployed URL, the backend's
+  `Cors:AllowedOrigins:0` App Setting (see the Backend app section above)
+  must be set to it — otherwise the deployed frontend can build and serve
+  fine but every API call from it fails CORS in the browser.
