@@ -1,0 +1,15 @@
+.status {
+  font-size: 0.75rem;
+}
+
+.status--checking {
+  opacity: 0.6;
+}
+
+.status--healthy {
+  color: #4caf50;
+}
+
+.status--unreachable {
+  color: #f44336;
+}
