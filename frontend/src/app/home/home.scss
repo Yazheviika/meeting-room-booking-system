@@ -1,0 +1,11 @@
+.home {
+  padding: 1.5rem;
+}
+
+.status--healthy {
+  color: var(--mat-sys-primary);
+}
+
+.status--unreachable {
+  color: var(--mat-sys-error);
+}

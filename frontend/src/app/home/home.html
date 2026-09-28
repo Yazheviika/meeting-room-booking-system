@@ -1,0 +1,15 @@
+<section class="home">
+  <h1>Meeting Room Booking</h1>
+
+  @switch (status()) {
+    @case ('checking') {
+      <p class="status status--checking">Checking backend status…</p>
+    }
+    @case ('healthy') {
+      <p class="status status--healthy">Backend is healthy.</p>
+    }
+    @case ('unreachable') {
+      <p class="status status--unreachable">Backend is unreachable.</p>
+    }
+  }
+</section>
