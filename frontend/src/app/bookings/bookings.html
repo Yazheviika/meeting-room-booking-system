@@ -1,0 +1,52 @@
+<section class="bookings">
+  <h1>My Bookings</h1>
+
+  @if (loading()) {
+    <p>Loading your bookings…</p>
+  } @else {
+    @if (errorMessage()) {
+      <p class="error-message">{{ errorMessage() }}</p>
+    }
+
+    <h2>Upcoming</h2>
+    @if (upcoming().length === 0) {
+      <p>No upcoming bookings.</p>
+    } @else {
+      <ul class="booking-list">
+        @for (booking of upcoming(); track booking.id) {
+          <li class="booking">
+            <span>
+              {{ booking.roomName }} — {{ booking.date }}
+              {{ booking.startTime.slice(0, 5) }}–{{ booking.endTime.slice(0, 5) }}
+            </span>
+            <button
+              mat-stroked-button
+              color="warn"
+              [disabled]="cancellingId() === booking.id"
+              (click)="cancel(booking)"
+            >
+              Cancel
+            </button>
+          </li>
+        }
+      </ul>
+    }
+
+    <h2>Past &amp; Cancelled</h2>
+    @if (others().length === 0) {
+      <p>Nothing here yet.</p>
+    } @else {
+      <ul class="booking-list booking-list--muted">
+        @for (booking of others(); track booking.id) {
+          <li class="booking" [class.booking--cancelled]="booking.status === 'Cancelled'">
+            <span>
+              {{ booking.roomName }} — {{ booking.date }}
+              {{ booking.startTime.slice(0, 5) }}–{{ booking.endTime.slice(0, 5) }}
+            </span>
+            <span class="booking-tag">{{ booking.status === 'Cancelled' ? 'Cancelled' : 'Past' }}</span>
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>
