@@ -179,6 +179,50 @@ database at once. Startup seeding (`IdentitySeeder`) is best-effort: if the
 database is unreachable, it logs an error and lets the app keep starting
 rather than crash-looping.
 
+### Frontend
+
+`AuthService` (`frontend/src/app/auth/auth.service.ts`) holds the session
+as a signal and persists it to `localStorage` as one JSON blob
+(`accessToken`, `expiresAtUtc`, and the user's id/email/roles) so it
+survives a page reload. **Trade-off, accepted deliberately**: anything in
+`localStorage` is readable by any JS running on the page — an XSS bug
+anywhere in the app (or a dependency) can steal the token, which an
+httpOnly cookie wouldn't allow. The production alternative would be an
+httpOnly cookie plus server-side session/CSRF handling; that's out of
+scope here since the backend is a stateless JWT API with no such
+infrastructure, and this is a task/demo app rather than one holding real
+user data.
+
+A `setTimeout` scheduled to the token's exact `expiresAtUtc` calls
+`logout()` automatically — this is (re)scheduled both on every
+login/register **and** on construction when a still-valid session is
+restored from `localStorage`, so a session that outlives a page reload
+still expires on time instead of silently living forever in that tab.
+`AuthService` also listens for the browser's `storage` event (which fires
+in *other* tabs when this tab's `localStorage` write happens) and
+re-applies whatever session is now stored — so logging in or out in one
+tab is reflected in every other open tab, each rescheduling its own
+auto-logout timer.
+
+A functional `HttpInterceptorFn` (`auth.interceptor.ts`) attaches
+`Authorization: Bearer <token>` to requests whose URL starts with
+`environment.apiBaseUrl`, but only when a token actually exists. A `401`
+response is treated as "the session expired" (→ `logout()` + redirect to
+`/login?returnUrl=...`) **only when this interceptor actually attached a
+token to that request** — a `401` from an unauthenticated request (e.g. a
+failed login with a wrong password) is left alone, since it's a "bad
+credentials" error for the login page itself to show, not a
+session-expiry event. This one rule keeps the two cases apart without a
+hardcoded list of "public" endpoints.
+
+`authGuard`/`adminGuard` (`guards.ts`) are **UX only** — they redirect
+inside the SPA so a logged-out user doesn't land on a page that will just
+fail, or a non-Admin doesn't see the Admin page render. They are not the
+real access control: every protected endpoint's `[Authorize]`/
+`"AdminOnly"` policy on the backend is what actually enforces this, and
+stays enforced even if a guard is bypassed (e.g. by calling the API
+directly).
+
 ## Rooms and time slots
 
 A room has a fixed daily set of bookable time slots (`Room` → `TimeSlot`,
