@@ -1,0 +1,50 @@
+<div class="auth-page">
+  <mat-card class="auth-card">
+    <mat-card-header>
+      <mat-card-title>Register</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+      <form [formGroup]="form" (ngSubmit)="onSubmit()">
+        <mat-form-field appearance="outline">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" autocomplete="email" />
+          @if (form.controls.email.invalid && form.controls.email.touched) {
+            <mat-error>Enter a valid email address.</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <input matInput type="password" formControlName="password" autocomplete="new-password" />
+        </mat-form-field>
+
+        @if (form.controls.password.touched) {
+          <ul class="password-rules">
+            <li [class.rule-met]="!passwordRuleErrors.minLength">At least 6 characters</li>
+            <li [class.rule-met]="!passwordRuleErrors.requireDigit">At least one digit</li>
+            <li [class.rule-met]="!passwordRuleErrors.requireLowercase">At least one lowercase letter</li>
+            <li [class.rule-met]="!passwordRuleErrors.requireUppercase">At least one uppercase letter</li>
+            <li [class.rule-met]="!passwordRuleErrors.requireNonAlphanumeric">At least one non-alphanumeric character</li>
+          </ul>
+        }
+
+        @if (serverErrors().length > 0) {
+          <ul class="error-message">
+            @for (message of serverErrors(); track message) {
+              <li>{{ message }}</li>
+            }
+          </ul>
+        }
+
+        <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+          {{ submitting() ? 'Registering…' : 'Register' }}
+        </button>
+      </form>
+    </mat-card-content>
+
+    <mat-card-actions>
+      <a routerLink="/login">Already have an account? Log in</a>
+    </mat-card-actions>
+  </mat-card>
+</div>
