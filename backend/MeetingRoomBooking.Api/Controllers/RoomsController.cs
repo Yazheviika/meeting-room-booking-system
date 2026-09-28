@@ -87,16 +87,20 @@ public class RoomsController : ControllerBase
             {
                 if (TimeSlotValidator.HasStarted(date, slot.StartTime, today, nowTimeOfDay))
                 {
-                    return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, SlotScheduleStatus.Past);
+                    return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, SlotScheduleStatus.Past, null);
                 }
 
                 if (!bookingsBySlot.TryGetValue(slot.Id, out var booking))
                 {
-                    return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, SlotScheduleStatus.Free);
+                    return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, SlotScheduleStatus.Free, null);
                 }
 
-                var status = booking.UserId == userId ? SlotScheduleStatus.Mine : SlotScheduleStatus.Booked;
-                return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, status);
+                var isMine = booking.UserId == userId;
+                var status = isMine ? SlotScheduleStatus.Mine : SlotScheduleStatus.Booked;
+                // BookingId is only ever populated for the caller's own booking —
+                // this is the caller's own id, not "who booked it," so it doesn't
+                // conflict with this endpoint's never-reveal-the-booker rule.
+                return new ScheduleSlotResponse(slot.Id, slot.StartTime, slot.EndTime, status, isMine ? booking.Id : null);
             })
             .ToList();
 
@@ -380,5 +384,11 @@ public enum SlotScheduleStatus
     Past,
 }
 
-/// <summary>One slot's schedule entry, returned by <see cref="RoomsController.GetSchedule"/>.</summary>
-public record ScheduleSlotResponse(int TimeSlotId, TimeOnly StartTime, TimeOnly EndTime, SlotScheduleStatus Status);
+/// <summary>
+/// One slot's schedule entry, returned by <see cref="RoomsController.GetSchedule"/>.
+/// <see cref="BookingId"/> is populated only when <see cref="Status"/> is
+/// <see cref="SlotScheduleStatus.Mine"/> (null otherwise) — it's the
+/// caller's own booking id, needed to call <c>DELETE /api/bookings/{id}</c>,
+/// not an identity disclosure about anyone else's booking.
+/// </summary>
+public record ScheduleSlotResponse(int TimeSlotId, TimeOnly StartTime, TimeOnly EndTime, SlotScheduleStatus Status, int? BookingId);
