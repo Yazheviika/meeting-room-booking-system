@@ -5,6 +5,7 @@
   <span class="spacer"></span>
 
   @if (authService.isLoggedIn()) {
+    <app-connection-indicator />
     <a mat-button routerLink="/rooms">Rooms</a>
     @if (authService.isAdmin()) {
       <a mat-button routerLink="/admin">Admin</a>

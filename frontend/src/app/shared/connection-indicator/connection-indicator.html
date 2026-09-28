@@ -1,0 +1,11 @@
+@switch (display()) {
+  @case ('live') {
+    <span class="status status--live" title="Real-time updates connected">Live</span>
+  }
+  @case ('reconnecting') {
+    <span class="status status--reconnecting" title="Reconnecting to real-time updates…">Reconnecting</span>
+  }
+  @case ('offline') {
+    <span class="status status--offline" title="Real-time updates unavailable">Offline</span>
+  }
+}
