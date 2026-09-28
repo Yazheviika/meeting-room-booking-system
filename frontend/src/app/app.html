@@ -1,5 +1,23 @@
 <mat-toolbar color="primary">
-  <span>Meeting Room Booking</span>
+  <span class="app-title">Meeting Room Booking</span>
+  <app-health-indicator />
+
+  <span class="spacer"></span>
+
+  @if (authService.isLoggedIn()) {
+    <a mat-button routerLink="/rooms">Rooms</a>
+    @if (authService.isAdmin()) {
+      <a mat-button routerLink="/admin">Admin</a>
+    }
+    <span class="user-email">{{ authService.currentUser()?.email }}</span>
+    @if (authService.isAdmin()) {
+      <span class="admin-badge">Admin</span>
+    }
+    <button mat-button (click)="logout()">Logout</button>
+  } @else {
+    <a mat-button routerLink="/login">Login</a>
+    <a mat-button routerLink="/register">Register</a>
+  }
 </mat-toolbar>
 
 <router-outlet />

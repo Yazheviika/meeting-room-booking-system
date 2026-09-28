@@ -1,0 +1,21 @@
+.app-title {
+  margin-right: 0.75rem;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.user-email {
+  margin-right: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.admin-badge {
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--mat-sys-tertiary);
+  color: var(--mat-sys-on-tertiary);
+  font-size: 0.75rem;
+}
