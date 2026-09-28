@@ -150,6 +150,41 @@ the request that reaches the server — and the `OnMessageReceived` code path
 it exercises — is identical. This path is therefore automated-tested, not
 just a documented gap.
 
+### Frontend implementation
+
+`frontend/src/app/signalr/booking-hub.service.ts` (`BookingHubService`)
+owns the app's single `HubConnection`. `withAutomaticReconnect()` only
+ever engages *after* a connection has succeeded once — it does nothing for
+a first `start()` that fails outright, which is exactly what happens
+against a cold, still-waking-up Azure backend. So the service owns its own
+indefinite retry loop (backoff: `0, 1s, 2s, 5s, 10s, …`) around the first
+connect, and re-enters that same loop if SignalR's own automatic reconnect
+eventually gives up (`onclose`) — callers never see a terminal "gave up"
+state short of an explicit `stop()`. `joinRoom`/`leaveRoom` self-start the
+connection if needed, so pages can call them regardless of timing; `App`
+is the only place that explicitly starts (on login) and stops (on logout)
+it, via an `effect()` watching `AuthService.isLoggedIn()`.
+
+`frontend/src/app/rooms/room-schedule/room-schedule.ts` implements the
+client protocol above with one addition for resilience: the initial join
+is raced against a short timeout rather than awaited unconditionally, so
+a slow/cold-starting connection never blocks the first schedule fetch —
+`hub.onConnected(...)` stays subscribed for the page's whole lifetime and
+always re-joins-then-re-fetches on every "now connected" transition
+(the delayed first success, or a genuine reconnect), healing whatever gap
+the bounded wait left.
+
+`frontend/src/app/rooms/schedule.reducer.ts` (`applySlotChanged`) is the
+pure `(schedule, event) -> schedule` that applies an externally-arriving
+`SlotChanged` event to the locally-held schedule: `isBooked: true` never
+overwrites a slot already known to be `"Mine"` (the event carries no
+identity, so this is the only way "someone booked it" and "I already know
+it's mine" don't fight); a slot already `"Past"` never changes either way.
+A component's *own* book/cancel response sets `"Mine"`/`"Free"` directly,
+never through this function — see `room-schedule.ts` for why a 409 re-
+fetches instead of assuming `"Booked"`, and why a cancel success only
+clears to `"Free"` if the slot is still `"Mine"` locally at that moment.
+
 ## Authentication
 
 ASP.NET Core Identity (EF Core stores, `AppDbContext : IdentityDbContext<ApplicationUser>`)
@@ -282,14 +317,18 @@ catches and turns into a 409 too, rather than a 500.
 `BookingResultKind`: `Created`, `AlreadyYours`, `Conflict`, `NotFound`,
 `Invalid`, plus `Cancelled`/`Forbidden` for cancellation) — the controller
 only maps this to HTTP status codes. After a successful create or cancel,
-`IBookingNotifier.SlotChangedAsync` is called (a no-op today; real SignalR
-comes in a later PR), only after the transaction commits, per this file's
-SignalR rule above.
+`IBookingNotifier.SlotChangedAsync` is called (the real SignalR
+implementation, `SignalRBookingNotifier`), only after the transaction
+commits, per this file's SignalR rule above.
 
 `GET /api/rooms/{id}/schedule` reports each slot as Free, Booked, Mine, or
 Past — **never** who booked it, for any caller including Admins (Admins get
 that detail from `GET /api/bookings` instead, which is Admin-only and
-explicitly for that purpose).
+explicitly for that purpose). A `Mine` slot's entry also carries
+`BookingId` (null for every other status) — the frontend needs it to call
+`DELETE /api/bookings/{id}` for a Cancel button, and exposing the caller's
+*own* booking id doesn't conflict with the never-reveal-who-booked-it rule,
+since it's not identity information about anyone else.
 
 ## Configuration keys
 
