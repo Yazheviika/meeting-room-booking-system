@@ -1,0 +1,24 @@
+.admin {
+  padding: 1.5rem;
+}
+
+.tab-content {
+  padding: 1rem 0;
+}
+
+.admin-table {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.create-form,
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.error-message {
+  color: var(--mat-sys-error);
+}
