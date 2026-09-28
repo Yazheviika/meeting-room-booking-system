@@ -1,0 +1,43 @@
+.room-schedule {
+  padding: 1.5rem;
+  max-width: 480px;
+}
+
+.office-time-note {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: -0.5rem;
+}
+
+.slot-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.slot--mine {
+  border-color: var(--mat-sys-primary);
+}
+
+.slot--past {
+  opacity: 0.5;
+}
+
+.slot-status {
+  flex: 1;
+}
+
+.error-message {
+  color: var(--mat-sys-error);
+}
