@@ -1,0 +1,167 @@
+<section class="admin">
+  <h1>Admin</h1>
+
+  <mat-tab-group>
+    <mat-tab label="Rooms">
+      <div class="tab-content">
+        @if (roomsError()) {
+          <p class="error-message">{{ roomsError() }}</p>
+        }
+
+        <table mat-table [dataSource]="rooms()" class="admin-table">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let room">
+              @if (editingRoomId() === room.id) {
+                <input [formControl]="editForm.controls.name" />
+              } @else {
+                {{ room.name }}
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>Description</th>
+            <td mat-cell *matCellDef="let room">
+              @if (editingRoomId() === room.id) {
+                <input [formControl]="editForm.controls.description" />
+              } @else {
+                {{ room.description }}
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="capacity">
+            <th mat-header-cell *matHeaderCellDef>Capacity</th>
+            <td mat-cell *matCellDef="let room">
+              @if (editingRoomId() === room.id) {
+                <input type="number" [formControl]="editForm.controls.capacity" />
+              } @else {
+                {{ room.capacity }}
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="slots">
+            <th mat-header-cell *matHeaderCellDef>Slots</th>
+            <td mat-cell *matCellDef="let room">{{ room.timeSlots.length }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let room">
+              @if (editingRoomId() === room.id) {
+                <button mat-button (click)="saveEdit(room)">Save</button>
+                <button mat-button (click)="cancelEdit()">Cancel</button>
+              } @else {
+                <button mat-button (click)="startEdit(room)">Edit</button>
+                <button mat-button color="warn" (click)="deleteRoom(room)">Delete</button>
+              }
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="roomColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: roomColumns"></tr>
+        </table>
+
+        @if (editErrors().length > 0) {
+          <ul class="error-message">
+            @for (message of editErrors(); track message) {
+              <li>{{ message }}</li>
+            }
+          </ul>
+        }
+
+        <h2>Create room</h2>
+        <form [formGroup]="createForm" (ngSubmit)="createRoom()" class="create-form">
+          <mat-form-field appearance="outline">
+            <mat-label>Name</mat-label>
+            <input matInput formControlName="name" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Description</mat-label>
+            <input matInput formControlName="description" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Capacity</mat-label>
+            <input matInput type="number" formControlName="capacity" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Start time</mat-label>
+            <input matInput type="time" formControlName="startTime" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>End time</mat-label>
+            <input matInput type="time" formControlName="endTime" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Slot length (min)</mat-label>
+            <input matInput type="number" formControlName="slotMinutes" />
+          </mat-form-field>
+
+          @if (createErrors().length > 0) {
+            <ul class="error-message">
+              @for (message of createErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          }
+
+          <button mat-flat-button color="primary" type="submit" [disabled]="creating()">Create room</button>
+        </form>
+      </div>
+    </mat-tab>
+
+    <mat-tab label="All bookings">
+      <div class="tab-content">
+        <form [formGroup]="filterForm" (ngSubmit)="loadBookings()" class="filter-form">
+          <mat-form-field appearance="outline">
+            <mat-label>Date</mat-label>
+            <input matInput type="date" formControlName="date" />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Room id</mat-label>
+            <input matInput type="number" formControlName="roomId" />
+          </mat-form-field>
+          <button mat-stroked-button type="submit">Filter</button>
+        </form>
+
+        @if (bookingsError()) {
+          <p class="error-message">{{ bookingsError() }}</p>
+        }
+
+        <table mat-table [dataSource]="bookings()" class="admin-table">
+          <ng-container matColumnDef="userEmail">
+            <th mat-header-cell *matHeaderCellDef>User</th>
+            <td mat-cell *matCellDef="let booking">{{ booking.userEmail }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="room">
+            <th mat-header-cell *matHeaderCellDef>Room</th>
+            <td mat-cell *matCellDef="let booking">{{ booking.roomName }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="time">
+            <th mat-header-cell *matHeaderCellDef>Time</th>
+            <td mat-cell *matCellDef="let booking">
+              {{ booking.startTime.slice(0, 5) }}–{{ booking.endTime.slice(0, 5) }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="date">
+            <th mat-header-cell *matHeaderCellDef>Date</th>
+            <td mat-cell *matCellDef="let booking">{{ booking.date }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let booking">{{ booking.status }}</td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="bookingColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: bookingColumns"></tr>
+        </table>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</section>
