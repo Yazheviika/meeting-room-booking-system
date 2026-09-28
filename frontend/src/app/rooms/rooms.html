@@ -1,0 +1,29 @@
+<section class="rooms">
+  <h1>Rooms</h1>
+
+  @if (loading()) {
+    <p>Loading rooms…</p>
+  } @else if (error()) {
+    <p class="error-message">{{ error() }}</p>
+  } @else if (rooms().length === 0) {
+    <p>No rooms available.</p>
+  } @else {
+    <div class="room-list">
+      @for (room of rooms(); track room.id) {
+        <a class="room-link" [routerLink]="['/rooms', room.id]">
+          <mat-card>
+            <mat-card-header>
+              <mat-card-title>{{ room.name }}</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <p>Capacity: {{ room.capacity }}</p>
+              @if (room.description) {
+                <p>{{ room.description }}</p>
+              }
+            </mat-card-content>
+          </mat-card>
+        </a>
+      }
+    </div>
+  }
+</section>
