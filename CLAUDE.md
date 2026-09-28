@@ -34,7 +34,11 @@ reflect booking status to all viewers in real time.
   (also set `Jwt:SigningKey` the same way — a random 32+ byte string; without
   it, any authenticated request 500s)
 - Health check: `GET /health`
-- Frontend (not yet scaffolded): `npm install`, `ng serve`, `npm test` (run from `frontend/`)
+- Frontend (run from `frontend/`): `npm install`, `ng serve` (dev server at
+  `http://localhost:4200`, proxies nothing — it calls the API directly via
+  `environment.apiBaseUrl`), `npm run build` (production build, output at
+  `dist/frontend/browser/`), `npm test` (Vitest, runs once and exits — no
+  watch mode, no browser dependency; this is the same command CI runs)
 - Booking concurrency tests use a real SQL Server, never EF InMemory (per
   ADR 0001 — InMemory can't reproduce RCSI or real unique-index
   enforcement). Plain `dotnet test` already covers them on Windows via
